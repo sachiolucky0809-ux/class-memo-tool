@@ -529,6 +529,32 @@ function renderAll(){
   previewClosing.textContent = closingText.value;
   renderSectionPreview(todayItems, previewToday);
   renderSectionPreview(tomorrowItems, previewTomorrow);
+  saveState();
+}
+
+// ===== 自動保存 =====
+const STORAGE_KEY = 'renrakuMemoData';
+
+function saveState(){
+  const data = {
+    date: dateInput.value,
+    intro: introText.value,
+    closing: closingText.value,
+    todayItems,
+    tomorrowItems
+  };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch(e){}
+}
+
+function loadState(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e){
+    return null;
+  }
 }
 
 function resetForm(){
@@ -570,7 +596,15 @@ function downloadPdf(){
   el.addEventListener('input', renderAll);
 });
 
-setToday();
+const saved = loadState();
+if(saved){
+  dateInput.value = saved.date || '';
+  if(typeof saved.intro === 'string') introText.value = saved.intro;
+  if(typeof saved.closing === 'string') closingText.value = saved.closing;
+  if(Array.isArray(saved.todayItems)) todayItems = saved.todayItems;
+  if(Array.isArray(saved.tomorrowItems)) tomorrowItems = saved.tomorrowItems;
+}
+if(!dateInput.value) setToday();
 renderItemEditor(todayItems, todayList);
 renderItemEditor(tomorrowItems, tomorrowList);
 renderAll();
