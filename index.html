@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>連絡事項メモ作成ツール</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="連絡メモ">
+<meta name="theme-color" content="#1a56db">
+<script src="vendor/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --blue:#1a56db;
+    --orange:#e08214;
+  }
+  * { box-sizing: border-box; }
+  body{
+    font-family:'Hiragino Kaku Gothic ProN','Yu Gothic','Meiryo',sans-serif;
+    background:#eef1f5;
+    margin:0;
+    padding:20px;
+    padding-top:max(20px, env(safe-area-inset-top));
+    padding-bottom:max(20px, env(safe-area-inset-bottom));
+    padding-left:max(20px, env(safe-area-inset-left));
+    padding-right:max(20px, env(safe-area-inset-right));
+    color:#222;
+  }
+  h1.page-title{
+    text-align:center;
+    font-size:20px;
+    margin:0 0 16px;
+    color:#333;
+  }
+  .toolbar{
+    max-width:1300px;
+    margin:0 auto 16px;
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .toolbar button{
+    padding:10px 22px;
+    font-size:14px;
+    border:none;
+    border-radius:8px;
+    cursor:pointer;
+    background:var(--blue);
+    color:#fff;
+    font-weight:bold;
+  }
+  .toolbar button.secondary{
+    background:#888;
+  }
+  .toolbar button.outline{
+    background:#fff;
+    color:var(--blue);
+    border:2px solid var(--blue);
+  }
+  .container{
+    display:flex;
+    flex-wrap:wrap;
+    gap:20px;
+    max-width:1300px;
+    margin:0 auto;
+  }
+  .editor, .preview-wrapper{
+    flex:1 1 480px;
+    min-width:340px;
+  }
+  .editor{
+    background:#fff;
+    border-radius:12px;
+    padding:20px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.08);
+  }
+  .editor h2{
+    font-size:14px;
+    margin:18px 0 6px;
+    color:#444;
+    border-left:4px solid var(--blue);
+    padding-left:8px;
+  }
+  .editor h2.orange-h{
+    border-left-color:var(--orange);
+  }
+  .editor label{
+    display:block;
+    font-size:12px;
+    color:#777;
+    margin:10px 0 4px;
+  }
+  .editor input[type=date], .editor > textarea{
+    width:100%;
+    padding:8px 10px;
+    font-size:14px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    font-family:inherit;
+    resize:vertical;
+  }
+
+  /* ===== 項目入力行 ===== */
+  .item-list{
+    margin-bottom:6px;
+  }
+  .item-row{
+    display:flex;
+    gap:8px;
+    align-items:flex-start;
+    margin-bottom:8px;
+  }
+  .item-row.sub{
+    margin-left:28px;
+  }
+  .item-row select{
+    flex:0 0 108px;
+    padding:6px 4px;
+    font-size:12px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    background:#fff;
+  }
+  .item-row.sub select{
+    color:#777;
+  }
+  .item-row textarea{
+    flex:1;
+    padding:6px 8px;
+    font-size:13px;
+    border:1px solid #ccc;
+    border-radius:6px;
+    resize:vertical;
+    font-family:inherit;
+    min-height:40px;
+    line-height:1.5;
+  }
+  .item-row.sub textarea{
+    background:#fafbff;
+  }
+  .item-actions{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+  }
+  .item-actions button{
+    font-size:11px;
+    padding:3px 7px;
+    border:1px solid #ccc;
+    border-radius:4px;
+    background:#fff;
+    cursor:pointer;
+  }
+  .item-actions button:disabled{
+    opacity:0.3;
+    cursor:default;
+  }
+  .item-actions button.remove-btn{
+    color:#c0392b;
+    border-color:#e0a8a0;
+  }
+  .add-item-btn{
+    display:block;
+    width:100%;
+    margin-top:4px;
+    padding:8px;
+    border:1px dashed #aaa;
+    border-radius:6px;
+    background:#f7f9fc;
+    cursor:pointer;
+    font-size:13px;
+    color:#555;
+  }
+  .add-item-btn:hover{
+    background:#eef2fb;
+  }
+
+  /* ===== プレビュー (MEMO本体) ===== */
+  .memo-card{
+    background:#fff;
+    border-radius:18px;
+    padding:36px 30px;
+    box-shadow:0 4px 18px rgba(0,0,0,0.12);
+    max-width:600px;
+    margin:0 auto;
+  }
+  .memo-title{
+    text-align:center;
+    font-size:46px;
+    font-weight:900;
+    letter-spacing:10px;
+    color:#1a1a2e;
+    margin:0;
+  }
+  .memo-date{
+    text-align:center;
+    color:#999;
+    font-size:13px;
+    margin:10px 0 28px;
+  }
+  .memo-intro{
+    line-height:1.9;
+    font-size:15px;
+    margin-bottom:24px;
+    white-space:pre-wrap;
+  }
+  .section-box{
+    border:2px solid var(--blue);
+    border-radius:10px;
+    overflow:hidden;
+    margin-bottom:24px;
+  }
+  .section-box.orange{
+    border-color:var(--orange);
+  }
+  .section-header{
+    background:var(--blue);
+    color:#fff;
+    padding:14px 18px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-weight:bold;
+    font-size:17px;
+  }
+  .section-header.orange{
+    background:var(--orange);
+  }
+  .section-icon{
+    width:15px;
+    height:15px;
+    background:#fff;
+    border-radius:3px;
+    flex-shrink:0;
+  }
+  .section-body{
+    padding:20px 20px 20px 36px;
+    background:#fdfdfe;
+  }
+  .section-body ul{
+    margin:0;
+    padding-left:18px;
+  }
+  .section-body li{
+    font-weight:bold;
+    font-size:15px;
+    line-height:1.7;
+    margin-bottom:16px;
+    white-space:pre-wrap;
+  }
+  .section-body li:last-child{
+    margin-bottom:0;
+  }
+  .sub-list{
+    margin:6px 0 0;
+    padding:2px 0 2px 14px;
+    border-left:2px solid #d8e2f5;
+    font-weight:normal;
+    color:#666;
+    font-size:14px;
+    line-height:1.7;
+  }
+  .section-box.orange .sub-list{
+    border-left-color:#f6dcb8;
+  }
+  .sub-list div{
+    margin-bottom:4px;
+    white-space:pre-wrap;
+  }
+  .sub-list div:last-child{
+    margin-bottom:0;
+  }
+  .memo-closing{
+    text-align:center;
+    margin-top:28px;
+    padding-top:20px;
+    border-top:1px solid #eee;
+    line-height:1.9;
+    font-size:15px;
+    white-space:pre-wrap;
+  }
+  .empty-note{
+    color:#bbb;
+    font-style:italic;
+    font-size:14px;
+  }
+
+  @media (max-width: 850px){
+    .container{ flex-direction:column; }
+  }
+
+  /* ===== 印刷時はフォーム部分を隠す ===== */
+  @media print{
+    body{ background:#fff; padding:0; }
+    .toolbar, .editor, h1.page-title{ display:none !important; }
+    .container{ display:block; }
+    .memo-card{ box-shadow:none; max-width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">連絡事項メモ作成ツール</h1>
+<div class="toolbar">
+  <button onclick="downloadPdf()">PDFをダウンロード</button>
+  <button class="outline" onclick="window.print()">印刷する</button>
+  <button class="secondary" onclick="resetForm()">入力をリセット</button>
+</div>
+
+<div class="container">
+  <!-- ====== 入力フォーム ====== -->
+  <div class="editor">
+    <label>作成日</label>
+    <input type="date" id="memoDate">
+
+    <label>あいさつ文</label>
+    <textarea id="introText" rows="3">お世話になっております。本日は1日よろしくお願いします。</textarea>
+
+    <h2>本日の予定・連絡</h2>
+    <div class="item-list" id="todayList"></div>
+    <button type="button" class="add-item-btn" onclick="addItem(todayItems, todayList)">＋ 項目を追加</button>
+
+    <h2 class="orange-h">明日の予定・連絡</h2>
+    <div class="item-list" id="tomorrowList"></div>
+    <button type="button" class="add-item-btn" onclick="addItem(tomorrowItems, tomorrowList)">＋ 項目を追加</button>
+
+    <label>締めの言葉</label>
+    <textarea id="closingText" rows="2">何かご不明点などございましたら、お声がけください。</textarea>
+  </div>
+
+  <!-- ====== プレビュー ====== -->
+  <div class="preview-wrapper">
+    <div class="memo-card" id="memoCard">
+      <h2 class="memo-title">MEMO</h2>
+      <div class="memo-date" id="previewDate"></div>
+      <div class="memo-intro" id="previewIntro"></div>
+
+      <div class="section-box blue">
+        <div class="section-header blue">
+          <span class="section-icon"></span>
+          本日の予定・連絡
+        </div>
+        <div class="section-body" id="previewToday"></div>
+      </div>
+
+      <div class="section-box orange">
+        <div class="section-header orange">
+          <span class="section-icon"></span>
+          明日の予定・連絡
+        </div>
+        <div class="section-body" id="previewTomorrow"></div>
+      </div>
+
+      <div class="memo-closing" id="previewClosing"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const WEEKDAYS = ['日','月','火','水','木','金','土'];
+
+const dateInput = document.getElementById('memoDate');
+const introText = document.getElementById('introText');
+const closingText = document.getElementById('closingText');
+
+const todayList = document.getElementById('todayList');
+const tomorrowList = document.getElementById('tomorrowList');
+
+const previewDate = document.getElementById('previewDate');
+const previewIntro = document.getElementById('previewIntro');
+const previewToday = document.getElementById('previewToday');
+const previewTomorrow = document.getElementById('previewTomorrow');
+const previewClosing = document.getElementById('previewClosing');
+
+// ===== 初期データ =====
+let todayItems = [
+  { type:'main', text:'6限：耳鼻科検診があります。' },
+  { type:'main', text:'時間割変更があります。' },
+  { type:'sub',  text:'「理科2」と「数学2」の時間が入れ替わります。' },
+  { type:'main', text:'放課後に数学補習があります。' }
+];
+
+let tomorrowItems = [
+  { type:'main', text:'頭髪服装検査があります。' },
+  { type:'main', text:'時間割変更があります。' },
+  { type:'sub',  text:'5限：「保健体育」→「数学1」に変更' },
+  { type:'main', text:'HRでの作業（Classi登録等）について' },
+  { type:'sub',  text:'明日のHRにて、生徒の「Classi新規登録およびパスワード変更」を行う可能性があります。' },
+  { type:'sub',  text:'作業時にはPCルームを使用します。' },
+  { type:'sub',  text:'※他クラスとの調整次第で、明日実施するかどうかが最終決定します。' }
+];
+
+function escapeHtml(str){
+  return str
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;');
+}
+
+function formatDate(dateStr){
+  if(!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  if(isNaN(d.getTime())) return '';
+  return `作成日：${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${WEEKDAYS[d.getDay()]}）`;
+}
+
+// ===== 入力フォームの行を描画 =====
+function renderItemEditor(items, containerEl){
+  containerEl.innerHTML = '';
+  items.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'item-row' + (item.type === 'sub' ? ' sub' : '');
+
+    const select = document.createElement('select');
+    select.innerHTML = `
+      <option value="main">メイン項目</option>
+      <option value="sub">サブ項目</option>
+    `;
+    select.value = item.type;
+    select.addEventListener('change', () => {
+      item.type = select.value;
+      renderItemEditor(items, containerEl);
+      renderAll();
+    });
+
+    const textarea = document.createElement('textarea');
+    textarea.rows = 2;
+    textarea.value = item.text;
+    textarea.placeholder = item.type === 'main' ? 'メイン項目を入力' : '補足（サブ項目）を入力';
+    textarea.addEventListener('input', () => {
+      item.text = textarea.value;
+      renderAll();
+    });
+
+    const actions = document.createElement('div');
+    actions.className = 'item-actions';
+
+    const upBtn = document.createElement('button');
+    upBtn.type = 'button';
+    upBtn.textContent = '↑';
+    upBtn.disabled = idx === 0;
+    upBtn.addEventListener('click', () => {
+      [items[idx - 1], items[idx]] = [items[idx], items[idx - 1]];
+      renderItemEditor(items, containerEl);
+      renderAll();
+    });
+
+    const downBtn = document.createElement('button');
+    downBtn.type = 'button';
+    downBtn.textContent = '↓';
+    downBtn.disabled = idx === items.length - 1;
+    downBtn.addEventListener('click', () => {
+      [items[idx + 1], items[idx]] = [items[idx], items[idx + 1]];
+      renderItemEditor(items, containerEl);
+      renderAll();
+    });
+
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '削除';
+    removeBtn.className = 'remove-btn';
+    removeBtn.addEventListener('click', () => {
+      items.splice(idx, 1);
+      renderItemEditor(items, containerEl);
+      renderAll();
+    });
+
+    actions.appendChild(upBtn);
+    actions.appendChild(downBtn);
+    actions.appendChild(removeBtn);
+
+    row.appendChild(select);
+    row.appendChild(textarea);
+    row.appendChild(actions);
+    containerEl.appendChild(row);
+  });
+}
+
+function addItem(items, containerEl){
+  items.push({ type: 'main', text: '' });
+  renderItemEditor(items, containerEl);
+  renderAll();
+}
+
+// ===== プレビュー描画 =====
+function renderSectionPreview(items, container){
+  // メイン項目ごとにサブ項目をグループ化
+  const groups = [];
+  for(const item of items){
+    if(item.type === 'main'){
+      groups.push({ main: item.text, subs: [] });
+    } else {
+      if(groups.length === 0) groups.push({ main: '', subs: [] });
+      groups[groups.length - 1].subs.push(item.text);
+    }
+  }
+  // 内容が空の項目は除く
+  const visibleGroups = groups.filter(g => g.main.trim() !== '' || g.subs.some(s => s.trim() !== ''));
+
+  if(visibleGroups.length === 0){
+    container.innerHTML = '<div class="empty-note">（項目がありません）</div>';
+    return;
+  }
+
+  let html = '<ul>';
+  for(const g of visibleGroups){
+    html += '<li>' + escapeHtml(g.main);
+    const subs = g.subs.filter(s => s.trim() !== '');
+    if(subs.length > 0){
+      html += '<div class="sub-list">';
+      for(const sub of subs){
+        html += '<div>- ' + escapeHtml(sub) + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</li>';
+  }
+  html += '</ul>';
+  container.innerHTML = html;
+}
+
+function renderAll(){
+  previewDate.textContent = formatDate(dateInput.value);
+  previewIntro.textContent = introText.value;
+  previewClosing.textContent = closingText.value;
+  renderSectionPreview(todayItems, previewToday);
+  renderSectionPreview(tomorrowItems, previewTomorrow);
+}
+
+function resetForm(){
+  if(!confirm('入力内容をリセットしますか？')) return;
+  introText.value = '';
+  closingText.value = '';
+  todayItems = [];
+  tomorrowItems = [];
+  renderItemEditor(todayItems, todayList);
+  renderItemEditor(tomorrowItems, tomorrowList);
+  setToday();
+  renderAll();
+}
+
+function setToday(){
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  dateInput.value = `${y}-${m}-${d}`;
+}
+
+// ===== PDFダウンロード =====
+function downloadPdf(){
+  const element = document.getElementById('memoCard');
+  const dateVal = dateInput.value || 'memo';
+  const filename = `連絡メモ_${dateVal}.pdf`;
+  const opt = {
+    margin: 10,
+    filename: filename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+  html2pdf().set(opt).from(element).save();
+}
+
+[dateInput, introText, closingText].forEach(el => {
+  el.addEventListener('input', renderAll);
+});
+
+setToday();
+renderItemEditor(todayItems, todayList);
+renderItemEditor(tomorrowItems, tomorrowList);
+renderAll();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+
+</body>
+</html>
