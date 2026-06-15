@@ -1,4 +1,4 @@
-const CACHE_NAME = 'renraku-memo-v2';
+const CACHE_NAME = 'renraku-memo-v3';
 const ASSETS = [
   './',
   './index.html',
